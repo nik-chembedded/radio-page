@@ -2,17 +2,25 @@
 
 A static web page for listening to Israeli radio stations live. Plain HTML/CSS/JS, no build step.
 
-**Features:** station grid, play/pause, volume, favorites, search, dark mode, remembers your last station and volume.
+**Features**
+- 18 stations in a glass-style grid, sticky mini-player with LIVE indicator and volume
+- Genre chips, search, favorites, "recently played" row
+- Sleep timer (15 min – 1.5 h)
+- Dark / light theme, remembers last station, volume and favorites
+- Installable as an app on phones (PWA) with its own icon
+- Keyboard: Space = play/pause, Up/Down = volume
 
 ## Run locally
 ```
 python -m http.server 8000
 ```
 then open http://localhost:8000 (or use the VS Code *Live Server* extension).
+Note: some Windows setups serve `.js` as `text/plain`, which stops the service worker from registering locally; GitHub Pages serves the right type.
 
 ## Edit
-- `stations.js` – add/remove stations (name, description, stream URL, badge text, colors)
-- `app.js` – player logic, `style.css` – look
+- `stations.js` – stations (name, description, stream URL, badge text, colors, genre `tags`) and the genre chip list
+- `style.css` – look, `app.js` – behavior, `index.html` – structure
+- `manifest.webmanifest`, `sw.js`, `icons/` – app install support. When you change shell files, bump `CACHE` in `sw.js`.
 
 ## Notes
 - Stream URLs must be HTTPS (GitHub Pages is HTTPS; plain-http streams are blocked as mixed content).

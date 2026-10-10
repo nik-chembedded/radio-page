@@ -3,11 +3,14 @@ const audio = new Audio();
 audio.preload = "none";
 
 const els = {
-  grid: $("grid"), empty: $("empty"), search: $("search"),
+  grid: $("grid"), empty: $("empty"), search: $("search"), chips: $("chips"),
   tabAll: $("tabAll"), tabFav: $("tabFav"), favCount: $("favCount"), total: $("stationTotal"),
+  recentSection: $("recentSection"), recentRow: $("recentRow"),
   nowLogo: $("nowLogo"), nowName: $("nowName"), nowStatus: $("nowStatus"),
   playBtn: $("playBtn"), playIcon: $("playIcon"),
   volume: $("volume"), volBtn: $("volBtn"), volIcon: $("volIcon"), themeBtn: $("themeBtn"),
+  sleepBtn: $("sleepBtn"), sleepLeft: $("sleepLeft"), sleepMenu: $("sleepMenu"), sleepOff: $("sleepOff"),
+  installBtn: $("installBtn"),
 };
 const root = document.documentElement;
 
@@ -26,10 +29,13 @@ const store = {
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
 };
 
+const MAX_RECENT = 6;
 let favorites = new Set(store.get("favorites", []));
+let recent = store.get("recent", []).filter((id) => STATIONS.some((s) => s.id === id)).slice(0, MAX_RECENT);
 let currentId = null;
 let tab = "all";
-let poppedId = null; // heart that was just toggled, for a one-off pop animation
+let genre = null;       // null = all genres
+let poppedId = null;    // heart that was just toggled, for a one-off pop animation
 
 // ---- theme ----
 function applyTheme(mode) {
@@ -46,10 +52,46 @@ els.themeBtn.addEventListener("click", () => {
 // ---- rendering ----
 function stationById(id) { return STATIONS.find((s) => s.id === id); }
 
+function renderChips() {
+  els.chips.innerHTML = "";
+  const make = (id, label) => {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.textContent = label;
+    b.setAttribute("aria-pressed", String(genre === id));
+    b.addEventListener("click", () => { genre = id; renderChips(); renderGrid(); });
+    els.chips.appendChild(b);
+  };
+  make(null, "All genres");
+  GENRES.forEach((g) => make(g.id, g.label));
+}
+
+function renderRecent() {
+  const q = els.search.value.trim();
+  els.recentSection.hidden = recent.length === 0 || q !== "";
+  els.recentRow.innerHTML = "";
+  for (const id of recent) {
+    const s = stationById(id);
+    if (!s) continue;
+    const b = document.createElement("button");
+    b.className = "recent-chip" + (id === currentId ? " active" : "");
+    b.title = `${s.name} (${s.nameHe})`;
+    b.innerHTML = '<span class="recent-badge"></span><span class="recent-name"></span>';
+    const badge = b.querySelector(".recent-badge");
+    badge.textContent = s.badge;
+    badge.style.backgroundColor = s.color;
+    badge.style.color = s.fg;
+    b.querySelector(".recent-name").textContent = s.name;
+    b.addEventListener("click", () => play(id));
+    els.recentRow.appendChild(b);
+  }
+}
+
 function renderGrid() {
   const q = els.search.value.trim().toLowerCase();
   const list = STATIONS.filter((s) => {
     if (tab === "fav" && !favorites.has(s.id)) return false;
+    if (genre && !(s.tags || []).includes(genre)) return false;
     if (!q) return true;
     return [s.name, s.nameHe, s.desc].some((t) => t.toLowerCase().includes(q));
   });
@@ -89,10 +131,12 @@ function renderGrid() {
 
   els.empty.hidden = list.length > 0;
   if (!list.length) {
-    els.empty.textContent = q ? `No stations match "${els.search.value.trim()}".`
-      : "No favorites yet.\nTap the heart on a station to add it.";
+    if (q) els.empty.textContent = `No stations match "${els.search.value.trim()}".`;
+    else if (tab === "fav" && !favorites.size) els.empty.textContent = "No favorites yet.\nTap the heart on a station to add it.";
+    else els.empty.textContent = "No stations in this selection.";
   }
   els.favCount.textContent = String(favorites.size);
+  renderRecent();
 }
 
 function isPlaying() { return !audio.paused && !!audio.getAttribute("src"); }
@@ -121,15 +165,22 @@ function renderPlayer(status) {
 function renderVolume() {
   const v = Number(els.volume.value);
   els.volIcon.innerHTML = v === 0 ? ICON_MUTE : ICON_VOL;
-  els.volume.style.setProperty("--v", `${v * 100}%`);
 }
 
 // ---- playback ----
 function setMediaSession(s) {
   if (!("mediaSession" in navigator)) return;
-  navigator.mediaSession.metadata = new MediaMetadata({ title: s.name, artist: s.desc, album: "Israel Radio" });
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: s.name, artist: s.desc, album: "Israel Radio",
+    artwork: [{ src: "icons/icon-512.png", sizes: "512x512", type: "image/png" }],
+  });
   navigator.mediaSession.setActionHandler("play", () => resume());
   navigator.mediaSession.setActionHandler("pause", () => pause());
+}
+
+function rememberRecent(id) {
+  recent = [id, ...recent.filter((r) => r !== id)].slice(0, MAX_RECENT);
+  store.set("recent", recent);
 }
 
 function play(id) {
@@ -137,6 +188,7 @@ function play(id) {
   if (!s) return;
   currentId = id;
   store.set("last", id);
+  rememberRecent(id);
   audio.src = s.url;
   setMediaSession(s);
   renderPlayer("Connecting…");
@@ -146,12 +198,12 @@ function play(id) {
   });
 }
 
-function pause() {
+function pause(status = "Paused") {
   // Drop the connection so resuming returns to the live stream, not a stale buffer.
   audio.pause();
   audio.removeAttribute("src");
   audio.load();
-  renderPlayer("Paused");
+  renderPlayer(status);
 }
 
 function resume() { if (currentId) play(currentId); }
@@ -169,15 +221,68 @@ els.volBtn.addEventListener("click", () => {
   const open = wrap.classList.toggle("open");
   els.volBtn.setAttribute("aria-expanded", String(open));
 });
-document.addEventListener("click", (e) => {
-  const wrap = els.volBtn.parentElement;
-  if (!wrap.contains(e.target)) { wrap.classList.remove("open"); els.volBtn.setAttribute("aria-expanded", "false"); }
-});
 
 audio.addEventListener("playing", () => renderPlayer("Live"));
 audio.addEventListener("waiting", () => renderPlayer("Buffering…"));
 audio.addEventListener("error", () => {
   if (audio.getAttribute("src")) renderPlayer("Stream unavailable. Try another station");
+});
+
+// ---- sleep timer ----
+let sleepEnd = 0;
+let sleepTick = null;
+
+function formatLeft(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+  const mm = String(m).padStart(2, "0"), ss = String(s).padStart(2, "0");
+  return h ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
+
+function renderSleep() {
+  const active = sleepEnd > 0;
+  els.sleepBtn.classList.toggle("active", active);
+  els.sleepLeft.hidden = !active;
+  els.sleepOff.hidden = !active;
+  if (active) els.sleepLeft.textContent = formatLeft(sleepEnd - Date.now());
+}
+
+function setSleep(minutes) {
+  clearInterval(sleepTick);
+  sleepTick = null;
+  sleepEnd = minutes > 0 ? Date.now() + minutes * 60000 : 0;
+  if (sleepEnd) {
+    sleepTick = setInterval(() => {
+      if (Date.now() >= sleepEnd) {
+        setSleep(0);
+        if (isPlaying()) pause("Sleep timer ended");
+        return;
+      }
+      renderSleep();
+    }, 1000);
+  }
+  renderSleep();
+}
+
+els.sleepBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const open = els.sleepMenu.hidden;
+  els.sleepMenu.hidden = !open;
+  els.sleepBtn.setAttribute("aria-expanded", String(open));
+});
+els.sleepMenu.addEventListener("click", (e) => {
+  const item = e.target.closest("[data-min]");
+  if (!item) return;
+  setSleep(Number(item.dataset.min));
+  els.sleepMenu.hidden = true;
+  els.sleepBtn.setAttribute("aria-expanded", "false");
+});
+
+// close popovers when clicking elsewhere
+document.addEventListener("click", (e) => {
+  const volWrap = els.volBtn.parentElement;
+  if (!volWrap.contains(e.target)) { volWrap.classList.remove("open"); els.volBtn.setAttribute("aria-expanded", "false"); }
+  if (!els.sleepMenu.contains(e.target)) { els.sleepMenu.hidden = true; els.sleepBtn.setAttribute("aria-expanded", "false"); }
 });
 
 // ---- favorites, tabs, search ----
@@ -205,6 +310,7 @@ els.search.addEventListener("input", renderGrid);
 document.addEventListener("keydown", (e) => {
   const tag = (e.target.tagName || "").toLowerCase();
   if (tag === "input" || tag === "textarea") return;
+  if (e.code === "Escape") { els.sleepMenu.hidden = true; return; }
   if (e.code === "Space" && tag !== "button") {
     e.preventDefault();
     if (currentId) (isPlaying() ? pause() : resume());
@@ -216,11 +322,32 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ---- install as an app (PWA) ----
+let installEvent = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installEvent = e;
+  els.installBtn.hidden = false;
+});
+els.installBtn.addEventListener("click", async () => {
+  if (!installEvent) return;
+  installEvent.prompt();
+  await installEvent.userChoice;
+  installEvent = null;
+  els.installBtn.hidden = true;
+});
+window.addEventListener("appinstalled", () => { els.installBtn.hidden = true; });
+
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+
 // ---- init ----
 els.total.textContent = String(STATIONS.length);
 els.volume.value = store.get("volume", "0.7");
 audio.volume = Number(els.volume.value);
 renderVolume();
+renderChips();
 // Browsers block autoplay, so restoring the last station only selects it; press play to start.
 const last = store.get("last", null);
 if (last && stationById(last)) currentId = last;

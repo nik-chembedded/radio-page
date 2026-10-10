@@ -199,3 +199,67 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- header actions, sleep timer menu, install button ---------- */
+.top-actions { display: flex; align-items: center; gap: 8px; }
+.pill-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 16px; border-radius: 999px;
+  border: 1px solid var(--glass-border); background: var(--accent); color: var(--on-accent);
+  font: inherit; font-weight: 700; font-size: .9rem; cursor: pointer;
+}
+.pill-btn[hidden], .menu[hidden], .sleep-left[hidden], .recent[hidden], .menu-item[hidden] { display: none; }
+.menu-wrap { position: relative; }
+.sleep-btn { position: relative; }
+.sleep-btn.active { color: var(--accent); border-color: var(--accent); }
+.sleep-left {
+  position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%);
+  padding: 1px 6px; border-radius: 999px; background: var(--accent); color: var(--on-accent);
+  font-size: .68rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.menu {
+  position: absolute; z-index: 20; top: calc(100% + 10px); right: 0; min-width: 190px; padding: 8px;
+  border-radius: 18px; background: var(--glass-strong); border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+}
+.menu-title { padding: 8px 12px 6px; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.menu-item {
+  display: block; width: 100%; padding: 10px 12px; border: 0; border-radius: 12px; background: none;
+  color: var(--text); font: inherit; font-weight: 500; text-align: start; cursor: pointer;
+}
+.menu-item:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.menu-item.off { color: var(--heart); }
+
+/* ---------- genre chips ---------- */
+.chips { display: flex; gap: 8px; margin: -4px 0 20px; overflow-x: auto; padding: 4px 2px 6px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--glass-border);
+  background: var(--glass); color: var(--text); font: inherit; font-size: .86rem; font-weight: 600; cursor: pointer;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); transition: background .2s, color .2s, transform .15s;
+}
+.chip:hover { transform: translateY(-1px); }
+.chip[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+
+/* ---------- recently played ---------- */
+.recent { margin: 14px 0 6px; }
+.recent h2 { margin: 0 0 10px; font-size: .78rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.recent-row { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: none; }
+.recent-row::-webkit-scrollbar { display: none; }
+.recent-chip {
+  flex: none; display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 16px;
+  border: 1px solid var(--glass-border); background: var(--glass); color: var(--text); font: inherit; cursor: pointer;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); transition: transform .15s;
+}
+.recent-chip:hover { transform: translateY(-2px); }
+.recent-chip.active { outline: 2px solid var(--accent); }
+.recent-badge {
+  width: 44px; height: 38px; border-radius: 11px; display: grid; place-items: center; text-align: center;
+  font-size: .62rem; font-weight: 800; line-height: 1.05; padding: 0 3px; overflow: hidden;
+}
+.recent-name { font-size: .85rem; font-weight: 600; white-space: nowrap; }
+
+@media (max-width: 519px) {
+  .pill-btn span, .pill-btn .label { display: none; }
+  .pill-btn { padding: 0 12px; }
+  .top-actions { gap: 6px; }
+}

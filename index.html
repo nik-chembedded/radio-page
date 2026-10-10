@@ -4,9 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Listen to Israeli radio stations live: Galgalatz, Galei Zahal, Kan, Eco 99FM, 103FM and more.">
-  <meta name="theme-color" content="#0d1220">
+  <meta name="theme-color" content="#0b0f1a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Israel Radio">
   <title>Israel Radio</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%93%BB%3C/text%3E%3C/svg%3E">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18,14 +23,41 @@
   <header class="topbar">
     <div>
       <h1>Israel Radio</h1>
-      <p class="tagline">Listen live to <span id="stationTotal">12</span> Israeli stations</p>
+      <p class="tagline">Listen live to <span id="stationTotal">18</span> Israeli stations</p>
     </div>
-    <button id="themeBtn" class="icon-btn" aria-label="Toggle dark mode" title="Toggle dark mode">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M20 15.31 23.31 12 20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69zM12 18V6c3.31 0 6 2.69 6 6s-2.69 6-6 6z"/></svg>
-    </button>
+    <div class="top-actions">
+      <button id="installBtn" class="pill-btn" hidden>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>
+        Install
+      </button>
+
+      <div class="menu-wrap">
+        <button id="sleepBtn" class="icon-btn sleep-btn" aria-label="Sleep timer" aria-haspopup="true" aria-expanded="false" title="Sleep timer">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61 1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.96 8.96 0 0 0 12 4a9 9 0 1 0 9 9c0-2.12-.74-4.07-1.97-5.61zM12 20a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"/></svg>
+          <span id="sleepLeft" class="sleep-left" hidden></span>
+        </button>
+        <div id="sleepMenu" class="menu" role="menu" hidden>
+          <div class="menu-title">Sleep timer</div>
+          <button class="menu-item" role="menuitem" data-min="15">15 minutes</button>
+          <button class="menu-item" role="menuitem" data-min="30">30 minutes</button>
+          <button class="menu-item" role="menuitem" data-min="60">1 hour</button>
+          <button class="menu-item" role="menuitem" data-min="90">1.5 hours</button>
+          <button id="sleepOff" class="menu-item off" role="menuitem" data-min="0" hidden>Turn off timer</button>
+        </div>
+      </div>
+
+      <button id="themeBtn" class="icon-btn" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M20 15.31 23.31 12 20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69zM12 18V6c3.31 0 6 2.69 6 6s-2.69 6-6 6z"/></svg>
+      </button>
+    </div>
   </header>
 
   <main>
+    <section id="recentSection" class="recent" hidden aria-label="Recently played">
+      <h2>Recently played</h2>
+      <div id="recentRow" class="recent-row"></div>
+    </section>
+
     <div class="toolbar">
       <div class="tabs" role="tablist">
         <button class="tab active" role="tab" id="tabAll" aria-selected="true">All</button>
@@ -39,6 +71,8 @@
         <input id="search" class="search" type="search" placeholder="Search stations" aria-label="Search stations" autocomplete="off">
       </label>
     </div>
+
+    <div id="chips" class="chips" role="group" aria-label="Filter by genre"></div>
 
     <ul id="grid" class="grid"></ul>
     <p id="empty" class="empty" hidden></p>
