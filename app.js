@@ -32,6 +32,7 @@ const store = {
 const MAX_RECENT = 6;
 let favorites = new Set(store.get("favorites", []));
 let recent = store.get("recent", []).filter((id) => STATIONS.some((s) => s.id === id)).slice(0, MAX_RECENT);
+let recentShown = [...recent]; // order on screen; stays stable while you click around
 let currentId = null;
 let tab = "all";
 let genre = null;       // null = all genres
@@ -68,11 +69,16 @@ function renderChips() {
 
 function renderRecent() {
   const q = els.search.value.trim();
-  els.recentSection.hidden = recent.length === 0 || q !== "";
+  els.recentSection.hidden = recentShown.length === 0 || q !== "";
+  const scroll = els.recentRow.scrollLeft;
   els.recentRow.innerHTML = "";
-  for (const id of recent) {
+  for (const id of recentShown) {
     const s = stationById(id);
     if (!s) continue;
+    const item = document.createElement("div");
+    item.className = "recent-item";
+    item.dataset.id = id;
+
     const b = document.createElement("button");
     b.className = "recent-chip" + (id === currentId ? " active" : "");
     b.title = `${s.name} (${s.nameHe})`;
@@ -83,11 +89,28 @@ function renderRecent() {
     badge.style.color = s.fg;
     b.querySelector(".recent-name").textContent = s.name;
     b.addEventListener("click", () => play(id));
-    els.recentRow.appendChild(b);
+
+    const x = document.createElement("button");
+    x.className = "recent-x";
+    x.setAttribute("aria-label", `Remove ${s.name} from recently played`);
+    x.title = "Remove";
+    x.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+    x.addEventListener("click", (e) => { e.stopPropagation(); removeRecent(id); });
+
+    item.append(b, x);
+    els.recentRow.appendChild(item);
   }
+  els.recentRow.scrollLeft = scroll;
 }
 
-function renderGrid() {
+function removeRecent(id) {
+  recent = recent.filter((r) => r !== id);
+  recentShown = recentShown.filter((r) => r !== id);
+  store.set("recent", recent);
+  renderRecent();
+}
+
+function renderGrid(animate = true) {
   const q = els.search.value.trim().toLowerCase();
   const list = STATIONS.filter((s) => {
     if (tab === "fav" && !favorites.has(s.id)) return false;
@@ -96,9 +119,11 @@ function renderGrid() {
     return [s.name, s.nameHe, s.desc].some((t) => t.toLowerCase().includes(q));
   });
 
+  els.grid.classList.toggle("no-anim", !animate);
   els.grid.innerHTML = "";
   list.forEach((s, i) => {
     const li = document.createElement("li");
+    li.dataset.id = s.id;
     li.className = "tile" + (s.id === currentId ? " active" : "");
     li.style.setProperty("--i", i);
 
@@ -137,6 +162,13 @@ function renderGrid() {
   }
   els.favCount.textContent = String(favorites.size);
   renderRecent();
+}
+
+// Clicking a station only moves the highlight; nothing else is rebuilt or re-animated.
+function updateActive() {
+  els.grid.querySelectorAll(".tile").forEach((t) => t.classList.toggle("active", t.dataset.id === currentId));
+  els.recentRow.querySelectorAll(".recent-item").forEach((it) =>
+    it.querySelector(".recent-chip").classList.toggle("active", it.dataset.id === currentId));
 }
 
 function isPlaying() { return !audio.paused && !!audio.getAttribute("src"); }
@@ -181,6 +213,11 @@ function setMediaSession(s) {
 function rememberRecent(id) {
   recent = [id, ...recent.filter((r) => r !== id)].slice(0, MAX_RECENT);
   store.set("recent", recent);
+  if (!recentShown.includes(id)) {
+    recentShown = [id, ...recentShown].slice(0, MAX_RECENT);
+    els.recentRow.scrollLeft = 0;
+    renderRecent();
+  }
 }
 
 function play(id) {
@@ -192,7 +229,7 @@ function play(id) {
   audio.src = s.url;
   setMediaSession(s);
   renderPlayer("Connecting…");
-  renderGrid();
+  updateActive();
   audio.play().catch((e) => {
     if (e.name !== "AbortError") renderPlayer("Can't play this station right now");
   });
@@ -290,7 +327,7 @@ function toggleFavorite(id) {
   if (favorites.has(id)) favorites.delete(id); else favorites.add(id);
   store.set("favorites", [...favorites]);
   poppedId = id;
-  renderGrid();
+  renderGrid(false);
   poppedId = null;
 }
 
@@ -304,7 +341,7 @@ function setTab(next) {
 }
 els.tabAll.addEventListener("click", () => setTab("all"));
 els.tabFav.addEventListener("click", () => setTab("fav"));
-els.search.addEventListener("input", renderGrid);
+els.search.addEventListener("input", () => renderGrid(false));
 
 // ---- keyboard: space = play/pause, up/down = volume (when not typing) ----
 document.addEventListener("keydown", (e) => {
