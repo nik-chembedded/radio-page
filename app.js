@@ -70,6 +70,7 @@ function renderGrid() {
     logo.style.backgroundColor = s.color;
     logo.style.color = s.fg;
     main.querySelector(".badge").textContent = s.badge;
+    if (s.badge.length > 8) logo.classList.add("long"); // two-line badges need a smaller font
     main.querySelector(".tile-name").textContent = s.name;
     main.querySelector(".tile-desc").textContent = s.desc;
     main.addEventListener("click", () => play(s.id));
