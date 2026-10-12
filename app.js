@@ -11,6 +11,7 @@ const els = {
   volume: $("volume"), volBtn: $("volBtn"), volIcon: $("volIcon"), themeBtn: $("themeBtn"),
   sleepBtn: $("sleepBtn"), sleepLeft: $("sleepLeft"), sleepMenu: $("sleepMenu"), sleepOff: $("sleepOff"),
   installBtn: $("installBtn"),
+  arrangeBtn: $("arrangeBtn"), editBar: $("editBar"), doneEdit: $("doneEdit"), resetOrder: $("resetOrder"),
 };
 const root = document.documentElement;
 
@@ -36,6 +37,8 @@ let recentShown = [...recent]; // order on screen; stays stable while you click 
 let currentId = null;
 let tab = "all";
 let genre = null;       // null = all genres
+let editing = false;     // "Arrange" mode
+let order = store.get("order", []); // saved station order (ids)
 let poppedId = null;    // heart that was just toggled, for a one-off pop animation
 
 // ---- theme ----
@@ -112,7 +115,7 @@ function removeRecent(id) {
 
 function renderGrid(animate = true) {
   const q = els.search.value.trim().toLowerCase();
-  const list = STATIONS.filter((s) => {
+  const list = orderedStations().filter((s) => {
     if (tab === "fav" && !favorites.has(s.id)) return false;
     if (genre && !(s.tags || []).includes(genre)) return false;
     if (!q) return true;
@@ -140,7 +143,7 @@ function renderGrid(animate = true) {
     if (s.badge.length > 8) logo.classList.add("long"); // two-line badges need a smaller font
     main.querySelector(".tile-name").textContent = s.name;
     main.querySelector(".tile-desc").textContent = s.desc;
-    main.addEventListener("click", () => play(s.id));
+    main.addEventListener("click", () => { if (!editing) play(s.id); });
 
     const fav = document.createElement("button");
     const isFav = favorites.has(s.id);
@@ -150,7 +153,14 @@ function renderGrid(animate = true) {
     fav.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${isFav ? ICON_HEART : ICON_HEART_OUTLINE}</svg>`;
     fav.addEventListener("click", () => toggleFavorite(s.id));
 
-    li.append(main, fav);
+    const grip = document.createElement("button");
+    grip.className = "grip";
+    grip.setAttribute("aria-label", `Move ${s.name}. Drag, or use the arrow keys.`);
+    grip.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M9 5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM9 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM9 16a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>';
+    grip.addEventListener("pointerdown", (e) => startDrag(e, li));
+    grip.addEventListener("keydown", (e) => keyMove(e, li, grip));
+
+    li.append(main, fav, grip);
     els.grid.appendChild(li);
   });
 
@@ -347,7 +357,7 @@ els.search.addEventListener("input", () => renderGrid(false));
 document.addEventListener("keydown", (e) => {
   const tag = (e.target.tagName || "").toLowerCase();
   if (tag === "input" || tag === "textarea") return;
-  if (e.code === "Escape") { els.sleepMenu.hidden = true; return; }
+  if (e.code === "Escape") { els.sleepMenu.hidden = true; if (editing) setEditing(false); return; }
   if (e.code === "Space" && tag !== "button") {
     e.preventDefault();
     if (currentId) (isPlaying() ? pause() : resume());
@@ -377,6 +387,136 @@ window.addEventListener("appinstalled", () => { els.installBtn.hidden = true; })
 
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+
+// ---- arrange mode: reorder tiles by dragging the handle (or arrow keys on it) ----
+function orderedStations() {
+  const byId = new Map(STATIONS.map((s) => [s.id, s]));
+  const out = [];
+  for (const id of order) if (byId.has(id)) { out.push(byId.get(id)); byId.delete(id); }
+  for (const s of byId.values()) out.push(s); // stations that were never arranged keep their default place
+  return out;
+}
+
+function saveOrderFromDom() {
+  order = [...els.grid.children].map((li) => li.dataset.id);
+  store.set("order", order);
+}
+
+function setEditing(on) {
+  editing = on;
+  document.body.classList.toggle("editing", on);
+  els.editBar.hidden = !on;
+  els.arrangeBtn.classList.toggle("active", on);
+  els.arrangeBtn.setAttribute("aria-pressed", String(on));
+  if (on) {
+    // Reordering only makes sense on the full list, so clear any filter first.
+    genre = null; els.search.value = "";
+    renderChips();
+    setTab("all");
+  }
+  renderGrid(false);
+}
+els.arrangeBtn.addEventListener("click", () => setEditing(!editing));
+els.doneEdit.addEventListener("click", () => setEditing(false));
+els.resetOrder.addEventListener("click", () => {
+  order = [];
+  store.set("order", order);
+  renderGrid(false);
+});
+
+// FLIP: measure, change the DOM, then animate each moved tile from its old spot to its new one.
+function flip(mutate, skip) {
+  const tiles = [...els.grid.children];
+  const first = new Map(tiles.map((t) => [t, t.getBoundingClientRect()]));
+  mutate();
+  for (const t of tiles) {
+    if (t === skip) continue;
+    const r = t.getBoundingClientRect(), f = first.get(t);
+    const dx = f.left - r.left, dy = f.top - r.top;
+    if (!dx && !dy) continue;
+    t.style.transition = "none";
+    t.style.transform = `translate(${dx}px, ${dy}px)`;
+    void t.offsetWidth;                       // commit the "from" position
+    t.style.transition = "transform .2s ease";
+    t.style.transform = "";
+  }
+}
+
+function keyMove(e, li, grip) {
+  const prev = { ArrowLeft: 1, ArrowUp: 1 }[e.key], next = { ArrowRight: 1, ArrowDown: 1 }[e.key];
+  if (!prev && !next) return;
+  e.preventDefault();
+  const sib = prev ? li.previousElementSibling : li.nextElementSibling;
+  if (!sib) return;
+  flip(() => (prev ? sib.before(li) : sib.after(li)), null);
+  saveOrderFromDom();
+  grip.focus();
+}
+
+let drag = null;
+
+function startDrag(e, li) {
+  if (!editing || e.button > 0) return;
+  e.preventDefault();
+  const grip = e.currentTarget;
+  try { grip.setPointerCapture(e.pointerId); } catch {}
+  const r = li.getBoundingClientRect();
+  drag = { li, grip, offX: e.clientX - r.left, offY: e.clientY - r.top, x: e.clientX, y: e.clientY, swapAt: 0, raf: 0 };
+  li.classList.add("dragging");
+  grip.addEventListener("pointermove", onDragMove);
+  grip.addEventListener("pointerup", endDrag);
+  grip.addEventListener("pointercancel", endDrag);
+  drag.raf = requestAnimationFrame(dragFrame);
+}
+
+function onDragMove(e) { if (drag) { drag.x = e.clientX; drag.y = e.clientY; updateDrag(); } }
+
+// Follow the pointer and swap with whichever tile is underneath.
+function updateDrag() {
+  if (!drag) return;
+  const { li } = drag;
+
+  li.style.transform = "none";                    // measure the tile's natural slot
+  const nat = li.getBoundingClientRect();
+  li.style.transform = `translate(${drag.x - drag.offX - nat.left}px, ${drag.y - drag.offY - nat.top}px)`;
+
+  const now = performance.now();
+  if (now < drag.swapAt) return;                  // let the previous move animation finish
+  const target = [...els.grid.children].find((t) => {
+    if (t === li) return false;
+    const r = t.getBoundingClientRect();
+    return drag.x >= r.left && drag.x <= r.right && drag.y >= r.top && drag.y <= r.bottom;
+  });
+  if (!target) return;
+  const kids = [...els.grid.children];
+  const after = kids.indexOf(target) > kids.indexOf(li);
+  flip(() => (after ? target.after(li) : target.before(li)), li);
+  drag.swapAt = now + 220;
+  updateDrag();                                   // re-anchor the dragged tile after the swap
+}
+
+// While dragging near the top/bottom edge, keep scrolling the page.
+function dragFrame() {
+  if (!drag) return;
+  if (drag.y < 90) window.scrollBy(0, -14);
+  else if (drag.y > innerHeight - 130) window.scrollBy(0, 14);
+  updateDrag();
+  drag.raf = requestAnimationFrame(dragFrame);
+}
+
+function endDrag() {
+  if (!drag) return;
+  const { li, grip } = drag;
+  cancelAnimationFrame(drag.raf);
+  grip.removeEventListener("pointermove", onDragMove);
+  grip.removeEventListener("pointerup", endDrag);
+  grip.removeEventListener("pointercancel", endDrag);
+  drag = null;
+  li.style.transition = "transform .18s ease";    // settle into the slot
+  li.style.transform = "";
+  setTimeout(() => { li.style.transition = ""; li.classList.remove("dragging"); }, 190);
+  saveOrderFromDom();
 }
 
 // ---- init ----

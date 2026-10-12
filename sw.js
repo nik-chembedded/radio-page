@@ -1,7 +1,7 @@
 // Service worker: caches the page shell so the app opens instantly and works as an installed app.
 // It never touches audio streams (they are cross-origin and are not cached).
 // Bump CACHE when you change shell files so users get the new version.
-const CACHE = "israel-radio-v1";
+const CACHE = "israel-radio-v2";
 const SHELL = [
   "./",
   "index.html",

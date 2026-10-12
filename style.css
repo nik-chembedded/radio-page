@@ -274,3 +274,36 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 }
 .recent-x:hover, .recent-x:focus-visible { opacity: 1; color: var(--heart); transform: scale(1.12); }
 .recent-row { padding-top: 8px; padding-right: 8px; }
+
+/* ---------- arrange mode ---------- */
+.icon-btn.active { color: var(--accent); border-color: var(--accent); }
+.edit-bar {
+  position: sticky; top: 8px; z-index: 15; display: flex; align-items: center; gap: 10px;
+  margin: 12px 0 4px; padding: 10px 10px 10px 16px; border-radius: 18px;
+  background: var(--glass-strong); border: 1px solid var(--accent); box-shadow: var(--shadow);
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+}
+.edit-bar[hidden] { display: none; }
+.edit-text { flex: 1; font-size: .88rem; }
+.edit-btn {
+  padding: 8px 14px; border-radius: 999px; border: 1px solid var(--glass-border); background: var(--glass);
+  color: var(--text); font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer;
+}
+.edit-btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+
+.grip {
+  display: none; position: absolute; top: 9px; left: 9px; width: 34px; height: 34px; padding: 0; border: 0;
+  border-radius: 50%; background: rgba(0, 0, 0, .45); color: #fff; place-items: center;
+  cursor: grab; touch-action: none; z-index: 2;
+}
+.grip:active { cursor: grabbing; }
+.editing .grip { display: grid; }
+.editing .fav { display: none; }
+.editing .toolbar, .editing .chips, .editing .recent { opacity: .4; pointer-events: none; }
+.editing .tile-main { cursor: default; animation: wiggle .5s ease-in-out infinite alternate; }
+.editing .tile:nth-child(even) .tile-main { animation-delay: -.25s; }
+@keyframes wiggle { from { transform: rotate(-.7deg); } to { transform: rotate(.7deg); } }
+.tile.dragging { z-index: 30; animation: none; }
+.tile.dragging .tile-main { animation: none; }
+.tile.dragging .tile-logo { transform: scale(1.07); box-shadow: 0 22px 44px rgba(0, 0, 0, .35); }
+.editing .tile-main:hover .tile-logo { transform: none; }

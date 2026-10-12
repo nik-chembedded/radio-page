@@ -4,7 +4,8 @@ A static web page for listening to Israeli radio stations live. Plain HTML/CSS/J
 
 **Features**
 - 18 stations in a glass-style grid, sticky mini-player with LIVE indicator and volume
-- Genre chips, search, favorites, "recently played" row
+- Genre chips, search, favorites, "recently played" row (with ✕ to remove)
+- Arrange mode: reorder tiles by dragging the handle (or arrow keys), order saved on the device
 - Sleep timer (15 min – 1.5 h)
 - Dark / light theme, remembers last station, volume and favorites
 - Installable as an app on phones (PWA) with its own icon
