@@ -7,6 +7,7 @@ A static web page for listening to Israeli radio stations live. Plain HTML/CSS/J
 - Genre chips, search, favorites, "recently played" row (with ✕ to remove)
 - Arrange mode: reorder tiles by dragging the handle (or arrow keys), order saved on the device
 - Sleep timer (15 min – 1.5 h)
+- Auto-reconnect: dropped or frozen streams are retried (6 tries with growing delay), and playback resumes when the network returns
 - Dark / light theme, remembers last station, volume and favorites
 - Installable as an app on phones (PWA) with its own icon
 - Keyboard: Space = play/pause, Up/Down = volume

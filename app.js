@@ -230,22 +230,77 @@ function rememberRecent(id) {
   }
 }
 
+// ---- auto-reconnect ----
+// `wantPlaying` is the user's intent: true after choosing a station, false after pressing pause.
+// While it is true, a dropped or stalled stream is retried with a growing delay.
+const BACKOFF = [1000, 2000, 4000, 8000, 12000, 15000]; // ms before retry 1..6
+const STALL_LIMIT = 12000;                              // give up on a silent connection after this long
+let wantPlaying = false;
+let attempts = 0;
+let retryTimer = null;
+let stallTimer = null;
+let healthyTimer = null;
+
+function clearRetryTimers() {
+  clearTimeout(retryTimer); retryTimer = null;
+  clearTimeout(stallTimer); stallTimer = null;
+  clearTimeout(healthyTimer); healthyTimer = null;
+}
+
+function connect() {
+  const s = stationById(currentId);
+  if (!s) return;
+  clearTimeout(stallTimer);
+  audio.src = s.url;                    // setting src again restarts the stream from the live edge
+  audio.play().catch((e) => {
+    if (e.name !== "AbortError") scheduleReconnect();
+  });
+  // If nothing starts playing soon, treat the connection as dead and retry.
+  stallTimer = setTimeout(() => { if (wantPlaying && !retryTimer) scheduleReconnect(); }, STALL_LIMIT);
+}
+
+function scheduleReconnect() {
+  if (!wantPlaying || !currentId || retryTimer) return;
+  clearTimeout(stallTimer); stallTimer = null;
+  clearTimeout(healthyTimer); healthyTimer = null;
+
+  if (!navigator.onLine) {              // no point retrying; the "online" event resumes it
+    renderPlayer("Offline. Waiting for connection…");
+    return;
+  }
+  if (attempts >= BACKOFF.length) {     // give up, leave a clear "tap play" state
+    wantPlaying = false;
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+    renderPlayer("Stream unavailable. Tap play to retry");
+    return;
+  }
+  const delay = BACKOFF[attempts];
+  attempts += 1;
+  renderPlayer(`Reconnecting… (${attempts}/${BACKOFF.length})`);
+  retryTimer = setTimeout(() => { retryTimer = null; connect(); }, delay);
+}
+
 function play(id) {
   const s = stationById(id);
   if (!s) return;
+  clearRetryTimers();
+  attempts = 0;
+  wantPlaying = true;
   currentId = id;
   store.set("last", id);
   rememberRecent(id);
-  audio.src = s.url;
   setMediaSession(s);
   renderPlayer("Connecting…");
   updateActive();
-  audio.play().catch((e) => {
-    if (e.name !== "AbortError") renderPlayer("Can't play this station right now");
-  });
+  connect();
 }
 
 function pause(status = "Paused") {
+  wantPlaying = false;                  // the user (or the sleep timer) stopped it: never reconnect
+  clearRetryTimers();
+  attempts = 0;
   // Drop the connection so resuming returns to the live stream, not a stale buffer.
   audio.pause();
   audio.removeAttribute("src");
@@ -269,10 +324,38 @@ els.volBtn.addEventListener("click", () => {
   els.volBtn.setAttribute("aria-expanded", String(open));
 });
 
-audio.addEventListener("playing", () => renderPlayer("Live"));
-audio.addEventListener("waiting", () => renderPlayer("Buffering…"));
+audio.addEventListener("playing", () => {
+  clearTimeout(stallTimer); stallTimer = null;
+  renderPlayer("Live");
+  // Count the connection as healthy only after it has stayed up a few seconds,
+  // so a stream that connects and drops straight away can't retry forever.
+  clearTimeout(healthyTimer);
+  healthyTimer = setTimeout(() => { attempts = 0; }, 5000);
+});
+audio.addEventListener("waiting", () => {
+  if (!wantPlaying) return;
+  renderPlayer(attempts ? `Reconnecting… (${attempts}/${BACKOFF.length})` : "Buffering…");
+  // Brief buffering is normal; a long freeze means the connection is dead.
+  clearTimeout(stallTimer);
+  stallTimer = setTimeout(() => { if (wantPlaying && !retryTimer) scheduleReconnect(); }, STALL_LIMIT);
+});
 audio.addEventListener("error", () => {
-  if (audio.getAttribute("src")) renderPlayer("Stream unavailable. Try another station");
+  if (audio.getAttribute("src")) scheduleReconnect();
+});
+audio.addEventListener("ended", () => scheduleReconnect()); // a live stream should never end
+
+// Network changes: stop hammering while offline, reconnect as soon as we're back.
+window.addEventListener("offline", () => {
+  if (!wantPlaying) return;
+  clearRetryTimers();
+  renderPlayer("Offline. Waiting for connection…");
+});
+window.addEventListener("online", () => {
+  if (!wantPlaying) return;
+  clearRetryTimers();
+  attempts = 0;
+  renderPlayer("Back online. Reconnecting…");
+  connect();
 });
 
 // ---- sleep timer ----
